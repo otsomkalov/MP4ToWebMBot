@@ -193,7 +193,7 @@ namespace MP4ToWebMBot.Services
             {
                 var outputFilePath = $"{Path.GetTempPath()}{Guid.NewGuid().ToString()}.webm";
                 
-                await _engine.ExecuteAsync($"-i {inputFile} -c:v libvpx {outputFilePath}");
+                await _engine.ExecuteAsync($"-i {inputFileName} -c:v libvpx {outputFilePath}");
                 
                 outputFile = new MediaFile(outputFilePath);
             }
