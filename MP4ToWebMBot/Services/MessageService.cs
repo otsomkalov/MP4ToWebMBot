@@ -33,7 +33,7 @@ namespace MP4ToWebMBot.Services
 
         public async Task HandleAsync(Message message)
         {
-            if (message.From.IsBot)
+            if (message.From?.IsBot == true)
             {
                 return;
             }
