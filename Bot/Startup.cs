@@ -1,14 +1,14 @@
+using Bot.Services;
+using Bot.Settings;
 using FFmpeg.NET;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using MP4ToWebMBot.Services;
-using MP4ToWebMBot.Settings;
 using Telegram.Bot;
 
-namespace MP4ToWebMBot
+namespace Bot
 {
     public class Startup
     {

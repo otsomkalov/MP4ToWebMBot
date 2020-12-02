@@ -1,10 +1,10 @@
 ﻿using System.Threading.Tasks;
+using Bot.Services;
 using Microsoft.AspNetCore.Mvc;
-using MP4ToWebMBot.Services;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 
-namespace MP4ToWebMBot.Controllers
+namespace Bot.Controllers
 {
     [ApiController]
     [Route("api/update")]

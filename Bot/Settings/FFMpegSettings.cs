@@ -1,4 +1,4 @@
-﻿namespace MP4ToWebMBot.Settings
+﻿namespace Bot.Settings
 {
     public class FFMpegSettings
     {
