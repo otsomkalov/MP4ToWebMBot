@@ -1,58 +1,77 @@
-using Bot.Services;
-using Bot.Settings;
-using FFmpeg.NET;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Telegram.Bot;
+﻿using Amazon;
+using Amazon.Runtime;
+using Bot.Extensions;
+using Microsoft.Extensions.Options;
 
-namespace Bot
+namespace Bot;
+
+public class Startup
 {
-    public class Startup
+    private readonly IConfiguration _configuration;
+
+    public Startup(IConfiguration configuration)
     {
-        private readonly IConfiguration _configuration;
+        _configuration = configuration;
+    }
 
-        public Startup(IConfiguration configuration)
-        {
-            _configuration = configuration;
-        }
-
-        // This method gets called by the runtime. Use this method to add services to the container.
-        public void ConfigureServices(IServiceCollection services)
-        {
-            var settings = _configuration.Get<AppSettings>();
-
-            services
-                .AddSingleton<ITelegramBotClient>(new TelegramBotClient(settings.Telegram.Token))
-                .AddSingleton(new Engine(settings.FFMpeg.Path))
-                .AddSingleton(settings)
-                .AddTransient<IMessageService, MessageService>();
-
-            services.AddHealthChecks();
-            
-            services.AddApplicationInsightsTelemetry();
-            
-            services.AddControllers()
-                .AddNewtonsoftJson();
-        }
-
-        // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
-        {
-            if (env.IsDevelopment())
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddSingleton<ITelegramBotClient>(provider =>
             {
-                app.UseDeveloperExceptionPage();
-            }
+                var settings = provider.GetRequiredService<IOptions<TelegramSettings>>().Value;
 
-            app.UseStaticFiles("/telegram-bot-api-data");
-            
-            app.UseRouting();
+                return new TelegramBotClient(settings.Token);
+            })
+            .AddSingleton<IAmazonSQS>(_ => new AmazonSQSClient(new EnvironmentVariablesAWSCredentials(), RegionEndpoint.EUCentral1))
+            .AddSingleton<FFMpegService>()
+            .AddSingleton<MessageService>();
 
-            app.UseHealthChecks("/health");
+        services.Configure<ServicesSettings>(_configuration.GetSection(ServicesSettings.SectionName))
+            .Configure<TelegramSettings>(_configuration.GetSection(TelegramSettings.SectionName))
+            .Configure<FFMpegSettings>(_configuration.GetSection(FFMpegSettings.SectionName));
 
-            app.UseEndpoints(endpoints => { endpoints.MapControllers(); });
+        services.AddQuartz(q =>
+        {
+            // base quartz scheduler, job and trigger configuration
+            q.UseMicrosoftDependencyInjectionJobFactory();
+
+            q.AddCronJob<DownloaderJob>(_configuration)
+                .AddCronJob<ConverterJob>(_configuration)
+                .AddCronJob<UploaderJob>(_configuration)
+                .AddCronJob<CleanerJob>(_configuration);
+        });
+
+        // ASP.NET Core hosting
+        services.AddQuartzServer(options =>
+        {
+            // when shutting down we want jobs to complete gracefully
+            options.WaitForJobsToComplete = true;
+        });
+
+        services.AddHealthChecks();
+
+        services.AddHttpClient();
+
+        services.AddApplicationInsightsTelemetry();
+
+        services.AddControllers()
+            .AddNewtonsoftJson();
+    }
+
+    // This method gets called by the runtime. Use this method to configure the HTTP request pipeline
+    public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+    {
+        if (env.IsDevelopment())
+        {
+            app.UseDeveloperExceptionPage();
         }
+
+        app.UseStaticFiles("/telegram-bot-api-data");
+
+        app.UseRouting();
+
+        app.UseHealthChecks("/health");
+
+        app.UseEndpoints(endpoints => { endpoints.MapControllers(); });
     }
 }

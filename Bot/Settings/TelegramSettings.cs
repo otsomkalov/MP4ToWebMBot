@@ -1,7 +1,10 @@
-﻿namespace Bot.Settings
+﻿namespace Bot.Settings;
+
+public class TelegramSettings
 {
-    public class TelegramSettings
-    {
-        public string Token { get; set; }
-    }
+    public const string SectionName = "Telegram";
+
+    public string ApiUrl { get; set; }
+
+    public string Token { get; set; }
 }
