@@ -24,7 +24,7 @@ public class MessageService
         if (message.Text?.StartsWith("/start") == true)
         {
             await _bot.SendTextMessageAsync(new(message.Chat.Id),
-                "Send me a video or link to WebM or add bot to group.");
+                "Send me a video or link to MP4 or add bot to group.");
         }
         else
         {
