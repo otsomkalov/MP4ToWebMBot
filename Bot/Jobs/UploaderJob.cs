@@ -27,45 +27,50 @@ public class UploaderJob : IJob
         var response = await _sqsClient.ReceiveMessageAsync(_servicesSettings.UploaderQueueUrl);
         var queueMessage = response.Messages.FirstOrDefault();
 
-        if (queueMessage != null)
+        if (queueMessage == null)
         {
-            var (receivedMessage, sentMessage, inputFilePath, outputFilePath, thumbnailFilePath) =
-                JsonSerializer.Deserialize<UploaderMessage>(queueMessage.Body)!;
+            return;
+        }
 
-            try
+        var (receivedMessage, sentMessage, inputFilePath, outputFileName, thumbnailFilePath) =
+            JsonSerializer.Deserialize<UploaderMessage>(queueMessage.Body)!;
+
+        try
+        {
+            await _bot.EditMessageTextAsync(new(sentMessage.Chat.Id),
+                sentMessage.MessageId,
+                "Your file is uploading 🚀");
+
+            var outputFilePath = Path.Combine(Path.GetTempPath(), outputFileName);
+
+            await using (var videoStream = File.OpenRead(outputFilePath))
+            await using (var imageStream = File.OpenRead(thumbnailFilePath))
             {
-                await _bot.EditMessageTextAsync(new(sentMessage.Chat.Id),
-                    sentMessage.MessageId,
-                    "Your file is uploading 🚀");
-
-                await using var videoStream = File.OpenRead(outputFilePath);
-                await using var imageStream = File.OpenRead(thumbnailFilePath);
-
-                await _bot.DeleteMessageAsync(new(sentMessage.Chat.Id),
-                    sentMessage.MessageId);
-
-                await _bot.SendVideoAsync(new(sentMessage.Chat.Id),
-                    new InputMedia(videoStream, outputFilePath),
+                await _bot.SendDocumentAsync(new(sentMessage.Chat.Id),
+                    new InputMedia(videoStream, outputFileName),
                     replyToMessageId: receivedMessage.MessageId,
                     thumb: new(imageStream, thumbnailFilePath),
                     disableNotification: true);
-
-                var cleanerMessage = new CleanerMessage(inputFilePath, outputFilePath, thumbnailFilePath);
-
-                await _sqsClient.SendMessageAsync(_servicesSettings.CleanerQueueUrl,
-                    JsonSerializer.Serialize(cleanerMessage, JsonSerializerConstants.SerializerOptions));
-
-                await _sqsClient.DeleteMessageAsync(_servicesSettings.UploaderQueueUrl, queueMessage.ReceiptHandle);
             }
-            catch (ApiRequestException telegramException)
-            {
-                _logger.LogError(telegramException, "Telegram error during Uploader execution:");
-                await _sqsClient.DeleteMessageAsync(_servicesSettings.UploaderQueueUrl, queueMessage.ReceiptHandle);
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, "Error during Uploader execution:");
-            }
+
+            await _bot.DeleteMessageAsync(new(sentMessage.Chat.Id),
+                sentMessage.MessageId);
+
+            var cleanerMessage = new CleanerMessage(inputFilePath, outputFilePath, thumbnailFilePath);
+
+            await _sqsClient.SendMessageAsync(_servicesSettings.CleanerQueueUrl,
+                JsonSerializer.Serialize(cleanerMessage, JsonSerializerConstants.SerializerOptions));
+
+            await _sqsClient.DeleteMessageAsync(_servicesSettings.UploaderQueueUrl, queueMessage.ReceiptHandle);
+        }
+        catch (ApiRequestException telegramException)
+        {
+            _logger.LogError(telegramException, "Telegram error during Uploader execution:");
+            await _sqsClient.DeleteMessageAsync(_servicesSettings.UploaderQueueUrl, queueMessage.ReceiptHandle);
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Error during Uploader execution:");
         }
     }
 }

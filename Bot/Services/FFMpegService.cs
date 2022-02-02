@@ -16,14 +16,16 @@ public class FFMpegService
 
     public async Task<string> ConvertAsync(string filePath)
     {
-        var outputFilePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.webm");
+        var fileName = $"{Guid.NewGuid()}.webm";
+        var outputFilePath = Path.Combine(Path.GetTempPath(), fileName);
 
         var argumentsParts = new List<string>
         {
             $"-i {filePath}",
             "-filter:v scale='trunc(iw/2)*2:trunc(ih/2)*2'",
-            "-c:a aac",
             "-max_muxing_queue_size 1024",
+            "-c:v libvpx-vp9",
+            "-c:a libopus",
             outputFilePath
         };
 
@@ -47,12 +49,12 @@ public class FFMpegService
             _logger.LogError(error);
         }
 
-        return outputFilePath;
+        return fileName;
     }
 
     public async Task<string> GetThumbnailAsync(string filePath)
     {
-        var thumbnailFilePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.jpg");
+        var thumbnailFilePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.png");
 
         var processStartInfo = new ProcessStartInfo
         {

@@ -39,7 +39,12 @@ public class MessageService
 
         if (!string.IsNullOrEmpty(message.Document?.FileName) && Mp4Regex.IsMatch(message.Document.FileName))
         {
-            await SendMessageAsync(message);
+            await SendMessageAsync(message, fileId: message.Document.FileId);
+        }
+
+        if (message.Video != null)
+        {
+            await SendMessageAsync(message, fileId: message.Video.FileId);
         }
     }
 
@@ -59,14 +64,14 @@ public class MessageService
         }
     }
 
-    private async Task SendMessageAsync(Message receivedMessage, string link = null)
+    private async Task SendMessageAsync(Message receivedMessage, string link = null, string fileId = null)
     {
         var sentMessage = await _bot.SendTextMessageAsync(new(receivedMessage.Chat.Id),
             "File is waiting to be downloaded 🕒",
             replyToMessageId: receivedMessage.MessageId,
             disableNotification: true);
 
-        var downloaderMessage = new DownloaderMessage(receivedMessage, sentMessage, link);
+        var downloaderMessage = new DownloaderMessage(receivedMessage, sentMessage, link, fileId);
 
         await _sqsClient.SendMessageAsync(_servicesSettings.DownloaderQueueUrl,
             JsonSerializer.Serialize(downloaderMessage, JsonSerializerConstants.SerializerOptions));

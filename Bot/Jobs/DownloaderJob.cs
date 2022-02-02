@@ -31,56 +31,58 @@ public class DownloaderJob : IJob
         var response = await _sqsClient.ReceiveMessageAsync(_servicesSettings.DownloaderQueueUrl);
         var queueMessage = response.Messages.FirstOrDefault();
 
-        if (queueMessage != null)
+        if (queueMessage == null)
         {
-            var (receivedMessage, sentMessage, link) = JsonSerializer.Deserialize<DownloaderMessage>(queueMessage.Body)!;
+            return;
+        }
 
-            try
+        var (receivedMessage, sentMessage, link, fileId) = JsonSerializer.Deserialize<DownloaderMessage>(queueMessage.Body)!;
+
+        try
+        {
+            if (sentMessage.Date < DateTime.UtcNow.AddDays(-2))
             {
-                if (sentMessage.Date < DateTime.UtcNow.AddDays(-2))
-                {
-                    sentMessage = await _bot.SendTextMessageAsync(new(receivedMessage.Chat.Id),
-                        "Downloading file 🚀",
-                        replyToMessageId: receivedMessage.MessageId,
-                        disableNotification: true);
-                }
-                else
-                {
-                    await _bot.EditMessageTextAsync(new(sentMessage.Chat.Id),
-                        sentMessage.MessageId,
-                        "Downloading file 🚀");
-                }
-
-                var inputFilePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.mp4");
-
-                if (string.IsNullOrEmpty(link))
-                {
-                    await HandleDocumentAsync(receivedMessage, sentMessage, inputFilePath);
-                }
-                else
-                {
-                    await HandleLinkAsync(receivedMessage, sentMessage, link, inputFilePath);
-                }
-
+                sentMessage = await _bot.SendTextMessageAsync(new(receivedMessage.Chat.Id),
+                    "Downloading file 🚀",
+                    replyToMessageId: receivedMessage.MessageId,
+                    disableNotification: true);
+            }
+            else
+            {
                 await _bot.EditMessageTextAsync(new(sentMessage.Chat.Id),
                     sentMessage.MessageId,
-                    "Your file is waiting to be converted 🕒");
+                    "Downloading file 🚀");
+            }
 
-                await _sqsClient.DeleteMessageAsync(_servicesSettings.DownloaderQueueUrl, queueMessage.ReceiptHandle);
-            }
-            catch (ApiRequestException telegramException)
+            var inputFilePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.mp4");
+
+            if (string.IsNullOrEmpty(link))
             {
-                _logger.LogError(telegramException, "Telegram error during Uploader execution:");
-                await _sqsClient.DeleteMessageAsync(_servicesSettings.DownloaderQueueUrl, queueMessage.ReceiptHandle);
+                await HandleDocumentAsync(fileId, receivedMessage, sentMessage, inputFilePath);
             }
-            catch (Exception e)
+            else
             {
-                _logger.LogError(e, "Error during Downloader execution:");
+                await HandleLinkAsync(link, receivedMessage, sentMessage, inputFilePath);
             }
+
+            await _bot.EditMessageTextAsync(new(sentMessage.Chat.Id),
+                sentMessage.MessageId,
+                "Your file is waiting to be converted 🕒");
+
+            await _sqsClient.DeleteMessageAsync(_servicesSettings.DownloaderQueueUrl, queueMessage.ReceiptHandle);
+        }
+        catch (ApiRequestException telegramException)
+        {
+            _logger.LogError(telegramException, "Telegram error during Uploader execution:");
+            await _sqsClient.DeleteMessageAsync(_servicesSettings.DownloaderQueueUrl, queueMessage.ReceiptHandle);
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Error during Downloader execution:");
         }
     }
 
-    private async Task HandleLinkAsync(Message receivedMessage, Message sentMessage, string linkOrFileName, string inputFilePath)
+    private async Task HandleLinkAsync(string linkOrFileName, Message receivedMessage, Message sentMessage, string inputFilePath)
     {
         using var client = _clientFactory.CreateClient();
         await using var fileStream = File.Create(inputFilePath);
@@ -119,11 +121,11 @@ public class DownloaderJob : IJob
         await SendMessageAsync(receivedMessage, sentMessage, inputFilePath);
     }
 
-    private async Task HandleDocumentAsync(Message receivedMessage, Message sentMessage, string inputFileName)
+    private async Task HandleDocumentAsync(string fileId, Message receivedMessage, Message sentMessage, string inputFileName)
     {
         await using (var fileStream = File.Create(inputFileName))
         {
-            await _bot.GetInfoAndDownloadFileAsync(receivedMessage.Document.FileId, fileStream);
+            await _bot.GetInfoAndDownloadFileAsync(fileId, fileStream);
         }
 
         await SendMessageAsync(receivedMessage, sentMessage, inputFileName);
