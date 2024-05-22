@@ -1,3 +1,5 @@
+**This project is archived and now a part of [ffmpeg-telegram-bot](https://github.com/otsomkalov/ffmpeg-telegram-bot)**
+
 # MP4 to WebM Telegram Bot
 
 Telegram Bot for converting MP4 videos to WebM. 
